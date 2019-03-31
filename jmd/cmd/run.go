@@ -15,60 +15,43 @@
 package cmd
 
 import (
-	"log"
+	"fmt"
+	"io/ioutil"
+	"os"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
+	"github.com/zwzn/jmd/run"
 )
 
-// watchCmd represents the watch command
-var watchCmd = &cobra.Command{
-	Use:   "watch",
-	Short: "watch a file and run when it changes",
+// runCmd represents the run command
+var runCmd = &cobra.Command{
+	Use:   "run <jmd file>",
+	Short: "runs a jmd file and outputs to stdout",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		inFile := args[0]
 		outFile, _ := cmd.Flags().GetString("out")
-
-		watcher, err := fsnotify.NewWatcher()
+		err := runFile(inFile, outFile)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Fprintf(os.Stderr, "%v\n", err)
 		}
-		defer watcher.Close()
-
-		err = watcher.Add(inFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		runFile(inFile, outFile)
-		if err != nil {
-			return err
-		}
-
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return nil
-				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					runFile(inFile, outFile)
-					if err != nil {
-						return err
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return nil
-				}
-				return err
-			}
-		}
+		return nil
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(watchCmd)
-	watchCmd.Flags().StringP("out", "o", "./out.md", "the file to output")
+	rootCmd.AddCommand(runCmd)
+	runCmd.Flags().StringP("out", "o", "./out.md", "the file to output")
+}
+
+func runFile(inFile, outFile string) error {
+	out, err := run.RunFile(inFile)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(outFile, []byte(out), 0644)
+	if err != nil {
+		return err
+	}
+	return nil
 }
